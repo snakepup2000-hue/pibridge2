@@ -141,7 +141,7 @@ accepting `S16_LE`, `S24_3LE`, `S32_LE` and `DSD_U32_BE` with `DOP=0, bitrev=0`.
 
 Probed, not assumed:
 
-- Raspberry Pi 4B, 8 GB, **gigabit eth0** at 192.168.86.20.
+- Raspberry Pi 4B, 8 GB, **gigabit eth0**.
 - Signalyst NAA OS: BusyBox userland, kernel 6.6.63-v8, **no compiler, no python**.
   Anything requiring a build on the Pi is off the table — this is why there is no receiver here.
 - FiiO K11 R2R on card 0, ALSA buffer floor 16 frames (41 µs), and `/proc/asound`
@@ -215,7 +215,7 @@ instead of 20.08 ms.
 
 ## Limits
 
-- Pi must be reachable and the key (`~/.ssh/hermes_pi`) already in `~/.ssh/authorized_keys`.
+- Pi must be reachable and your SSH key already in its `~/.ssh/authorized_keys`.
 - One concurrent player; a second `aplay` gets "device busy", which is the K11 being single-tenant.
 - Mono input is duplicated to both channels; anything above stereo is rejected.
 - DSD is capped at DSD256 because of the K11's 384 kHz word rate.
@@ -226,22 +226,73 @@ instead of 20.08 ms.
 - The receiver accepts `hw:` devices only: it has no plug/conversion layer, so a format the
   DAC does not accept is an error rather than a silent conversion.
 
-## Requirements and configuration
+## Requirements
 
-Built and tested on macOS 14 / Apple silicon, against a Raspberry Pi 4B running the
-Signalyst NAA image (no sudo, pubkey-only SSH) and a FiiO K11 R2R. The app build needs
-Xcode's toolchain, not just CommandLineTools — the CLT SDK has no `SwiftUIMacros`
-plugin, so `@State` cannot expand there.
+macOS 13 or later / Apple silicon. A Raspberry Pi reachable over SSH with a DAC that
+`aplay` can open. Nothing is installed on the Pi beyond what the image already has.
 
-The defaults point at that rig. They live in one place — `src/defaults.hpp` for the CLI
-and `PiDefaults` in `app/Engine.swift` for the app, which must be kept in step. Edit
-those lines, or pass the flags:
+Built and tested against a Raspberry Pi 4B running the Signalyst NAA image (no sudo,
+pubkey-only SSH) and a FiiO K11 R2R, which is what the latency and underrun numbers
+below were measured on.
 
+The app build needs Xcode's toolchain, not just CommandLineTools — the CLT SDK has no
+`SwiftUIMacros` plugin, so `@State` cannot expand there.
+
+## Setting up your Pi
+
+Nothing here assumes anything about your network. The defaults are a Raspberry Pi
+answering to its mDNS name, the standard `pi` account, `~/.ssh/id_ed25519`, and ALSA
+device `hw:0,0`. What has to be true:
+
+**1. The Pi answers, and you can log in.**
+
+```bash
+ssh pi@raspberrypi.local
 ```
-pibridge play track.flac --host 10.0.0.5 --user pi --key ~/.ssh/id_ed25519
+
+No mDNS name? Use the address. Raspberry Pi OS ships Avahi; minimal images
+(Signalyst's NAA, for instance) often do not advertise one.
+
+**2. Key-based, non-interactive SSH** — the engine runs `ssh` in batch mode, so a
+password prompt is a hang.
+
+```bash
+ssh-keygen -t ed25519 -C pibridge     # if you have no key yet
+ssh-copy-id pi@raspberrypi.local
+ssh -o BatchMode=yes pi@raspberrypi.local true && echo works
 ```
 
-`pibridge diag` prints what it is about to use before it connects.
+**3. `aplay` sees the DAC.**
+
+```bash
+ssh pi@raspberrypi.local 'aplay -l; cat /proc/asound/cards'
+```
+
+The device is `hw:N,0`, N from that output — `hw:0,0` for the usual single USB DAC.
+It must be the `hw:` form: the stream is written raw, and there is no conversion
+layer to absorb a format the device will not take.
+
+**4. Point pibridge at it.** `pibridge diag` prints what it is about to use and then
+reports the Pi's OS, its sound cards, the formats and rates the DAC accepts, whether
+the receiver is installed, and the link speed. Fix anything it flags before trying
+to play.
+
+Values come from, in order: the flag, the environment variable, the default.
+
+| flag | environment variable | default |
+|---|---|---|
+| `--host` | `PIBRIDGE_HOST` | `raspberrypi.local` |
+| `--user` | `PIBRIDGE_USER` | `pi` |
+| `--device` | `PIBRIDGE_DEVICE` | `hw:0,0` |
+| `--key` | `PIBRIDGE_KEY` | `~/.ssh/id_ed25519` |
+
+```bash
+pibridge diag --host 192.168.1.50 --user pi --device hw:0,0
+PIBRIDGE_HOST=192.168.1.50 pibridge diag      # same thing
+```
+
+The app has the same defaults and reads the same variables, so launching it from a
+shell with `PIBRIDGE_HOST` set configures it without touching the UI.
 
 ## Licence
 

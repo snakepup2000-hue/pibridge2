@@ -62,11 +62,11 @@ void sleepUntil(double t) {
 struct Options {
     std::string file;                 // first input, for display
     std::vector<std::string> inputs;  // files and/or directories, in order
-    std::string host = kDefaultHost;
-    std::string user = kDefaultUser;
+    std::string host = defaultHost();
+    std::string user = defaultUser();
     std::string key;
     std::string sock;
-    std::string device = kDefaultDevice;
+    std::string device = defaultDevice();
     std::string receiver = "aplay";     // remote player: aplay | /path/to/hqdac
     std::string mode = "pcm";          // pcm | dsd
     std::string localOut;              // write raw output to this file instead of the Pi
@@ -523,7 +523,7 @@ void usage() {
         "\n"
         "  --host HOST        Pi address            (default %s)\n"
         "  --user USER        ssh user              (default %s)\n"
-        "  --key PATH         ssh identity file     (default ~/.ssh/%s)\n"
+        "  --key PATH         ssh identity file     (default %s)\n"
         "  --sock PATH        control socket        (default /tmp/pibridge.sock)\n"
         "  --device DEV       ALSA device           (default %s)\n"
         "  --receiver CMD     remote player         (default aplay; e.g. ~/hqdac)\n"
@@ -544,8 +544,13 @@ void usage() {
         "  --local-out FILE   write raw output locally instead of streaming\n"
         "  --metrics FILE     write a JSON report\n"
         "  -v, --verbose      per-second status\n"
-        "  --status-json      per-second @status JSON lines on stderr\n",
-        kDefaultHost, kDefaultUser, kDefaultKeyName, kDefaultDevice);
+        "  --status-json      per-second @status JSON lines on stderr\n"
+        "\n"
+        "Defaults are generic (mDNS host, the `pi` account, id_ed25519). Override\n"
+        "with the flags above or with PIBRIDGE_HOST / PIBRIDGE_USER / PIBRIDGE_KEY /\n"
+        "PIBRIDGE_DEVICE.\n",
+        defaultHost().c_str(), defaultUser().c_str(),
+        defaultKeyPathDisplay(), defaultDevice().c_str());
 }
 
 }  // namespace
@@ -557,11 +562,13 @@ int main(int argc, char** argv) {
     ::signal(SIGTERM, onSignal);
 
     if (argc >= 2 && std::strcmp(argv[1], "diag") == 0) {
-        std::string host = kDefaultHost, user = kDefaultUser, key, sock = "/tmp/pibridge.sock";
+        std::string host = defaultHost(), user = defaultUser(), key, sock = "/tmp/pibridge.sock";
+        std::string device = defaultDevice();
         for (int i = 2; i < argc; ++i) {
             if (!std::strcmp(argv[i], "--host") && i + 1 < argc) host = argv[++i];
             else if (!std::strcmp(argv[i], "--user") && i + 1 < argc) user = argv[++i];
             else if (!std::strcmp(argv[i], "--key") && i + 1 < argc) key = argv[++i];
+            else if (!std::strcmp(argv[i], "--device") && i + 1 < argc) device = argv[++i];
         }
         if (key.empty()) key = defaultKeyPath();
         std::string err;
@@ -574,15 +581,16 @@ int main(int argc, char** argv) {
             "echo \"model: $(cat /proc/device-tree/model 2>/dev/null | tr -d '\\0')\"; "
             "echo \"cores: $(nproc)\"; "
             "echo; echo \"--- sound cards\"; cat /proc/asound/cards; "
-            "echo; echo \"--- formats\"; "
-            "aplay -D hw:CARD=R2R,DEV=0 -t raw -f S32_LE -r 44100 -c 2 --dump-hw-params - </dev/null 2>&1 "
+            "echo; echo \"--- formats (" + device + ")\"; "
+            "aplay -D " + device + " -t raw -f S32_LE -r 44100 -c 2 --dump-hw-params - </dev/null 2>&1 "
             "| sed -n '/FORMAT/p;/RATE/p;/BUFFER_SIZE/p'; "
             "echo; echo \"--- DSD altset\"; "
-            "sed -n '/DSD_U32_BE/,+3p' /proc/asound/card0/stream0 | head -n 4; "
+            "for s in /proc/asound/card*/stream0; do "
+            "sed -n '/DSD_U32_BE/,+3p' $s 2>/dev/null | head -n 4; done | head -n 4; "
             "echo; echo \"--- receiver\"; "
             "for r in ~/hqdac /tmp/hqdac; do "
             "if [ -x $r ]; then echo \"found: $r\"; "
-            "$r -D hw:CARD=R2R,DEV=0 --caps 2>&1 | sed -n \"1p\"; break; fi; done; "
+            "$r -D " + device + " --caps 2>&1 | sed -n \"1p\"; break; fi; done; "
             "echo; echo \"--- link\"; "
             "for i in /sys/class/net/*; do n=$(basename $i); "
             "sp=$(cat $i/speed 2>/dev/null); "

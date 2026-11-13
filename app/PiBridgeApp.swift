@@ -204,7 +204,7 @@ struct ContentView: View {
                     sub: "jitter budget",
                     state: engine.status.ringMs > 0 ? .good : .idle)
             HopLink(active: engine.isRunning)
-            HopNode(label: "K11 · DMA",
+            HopNode(label: "DAC · DMA",
                     value: engine.status.devMeanMs > 0
                         ? String(format: "%.2f ms", engine.status.devMeanMs) : "—",
                     sub: engine.status.bufferMs > 0
@@ -895,7 +895,7 @@ struct SettingsSheet: View {
                 TextField("Host", text: $engine.host, prompt: Text(PiDefaults.host))
                 TextField("User", text: $engine.user, prompt: Text("up"))
                 TextField("ALSA device", text: $engine.device,
-                          prompt: Text("hw:CARD=R2R,DEV=0"))
+                          prompt: Text(PiDefaults.device))
                 TextField("SSH key", text: $engine.keyPath)
                 TextField("Receiver", text: $engine.receiver, prompt: Text("aplay"))
             }

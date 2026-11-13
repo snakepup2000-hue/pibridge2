@@ -1,14 +1,29 @@
 import Foundation
 import Combine
 
-/// Defaults for the rig this was built against, mirroring src/defaults.hpp.
-/// Keep the two in step. They make the app usable with no configuration on the
-/// machine it was developed on; every one is overridden by the saved setting.
+/// Where to look for the Pi, mirroring src/defaults.hpp. Keep the two in step.
+///
+/// The defaults are generic on purpose: a Raspberry Pi on your LAN answering to
+/// its mDNS name, the standard `pi` account, a normal id_ed25519 key. Nothing
+/// here knows about anyone's network.
+///
+/// Resolution order for each value: saved setting, then the environment
+/// variable (PIBRIDGE_HOST / _USER / _KEY / _DEVICE), then the default below.
 enum PiDefaults {
-    static let host = "192.168.86.20"
-    static let user = "up"
-    static let device = "hw:CARD=R2R,DEV=0"
-    static let keyPath = "~/.ssh/hermes_pi"
+    static let hostName = "PIBRIDGE_HOST"
+    static let userName = "PIBRIDGE_USER"
+    static let keyName = "PIBRIDGE_KEY"
+    static let deviceName = "PIBRIDGE_DEVICE"
+
+    static var host: String { fromEnv(hostName) ?? "raspberrypi.local" }
+    static var user: String { fromEnv(userName) ?? "pi" }
+    static var device: String { fromEnv(deviceName) ?? "hw:0,0" }
+    static var keyPath: String { fromEnv(keyName) ?? "~/.ssh/id_ed25519" }
+
+    private static func fromEnv(_ name: String) -> String? {
+        guard let v = ProcessInfo.processInfo.environment[name], !v.isEmpty else { return nil }
+        return v
+    }
 }
 
 /// Owns the `pibridge` engine process and turns its stderr into UI state.
