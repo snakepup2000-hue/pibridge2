@@ -66,6 +66,7 @@ struct Options {
     std::string user = defaultUser();
     std::string key;
     std::string sock;
+    bool sockExplicit = false;
     std::string device = defaultDevice();
     std::string receiver = "aplay";     // remote player: aplay | /path/to/hqdac
     std::string mode = "pcm";          // pcm | dsd
@@ -524,7 +525,7 @@ void usage() {
         "  --host HOST        Pi address            (default %s)\n"
         "  --user USER        ssh user              (default %s)\n"
         "  --key PATH         ssh identity file     (default %s)\n"
-        "  --sock PATH        control socket        (default /tmp/pibridge.sock)\n"
+        "  --sock PATH        control socket        (default /tmp/pibridge-<user>@<host>.sock)\n"
         "  --device DEV       ALSA device           (default %s)\n"
         "  --receiver CMD     remote player         (default aplay; e.g. ~/hqdac)\n"
         "  --mode pcm|dsd     output format         (default pcm)\n"
@@ -562,7 +563,7 @@ int main(int argc, char** argv) {
     ::signal(SIGTERM, onSignal);
 
     if (argc >= 2 && std::strcmp(argv[1], "diag") == 0) {
-        std::string host = defaultHost(), user = defaultUser(), key, sock = "/tmp/pibridge.sock";
+        std::string host = defaultHost(), user = defaultUser(), key, sock;
         std::string device = defaultDevice();
         for (int i = 2; i < argc; ++i) {
             if (!std::strcmp(argv[i], "--host") && i + 1 < argc) host = argv[++i];
@@ -571,6 +572,7 @@ int main(int argc, char** argv) {
             else if (!std::strcmp(argv[i], "--device") && i + 1 < argc) device = argv[++i];
         }
         if (key.empty()) key = defaultKeyPath();
+        sock = defaultSock(user, host);
         std::string err;
         if (!ensureMaster(sock, key, user, host, err)) {
             std::fprintf(stderr, "pibridge diag: %s\n", err.c_str());
@@ -617,7 +619,7 @@ int main(int argc, char** argv) {
 
     Options o;
     o.key = defaultKeyPath();
-    o.sock = "/tmp/pibridge.sock";
+    o.sockExplicit = false;
 
     static const struct option longopts[] = {
         {"host", required_argument, nullptr, 'H'},
@@ -655,7 +657,7 @@ int main(int argc, char** argv) {
             case 'H': o.host = optarg; break;
             case 'u': o.user = optarg; break;
             case 'k': o.key = optarg; break;
-            case 's': o.sock = optarg; break;
+            case 's': o.sock = optarg; o.sockExplicit = true; break;
             case 'd': o.device = optarg; break;
             case 'C': o.receiver = optarg; break;
             case 'm': o.mode = optarg; break;
@@ -679,6 +681,9 @@ int main(int argc, char** argv) {
             default: usage(); return 2;
         }
     }
+    // The default socket is per-target, so it can only be resolved now
+    // that --host and --user are known.
+    if (!o.sockExplicit) o.sock = defaultSock(o.user, o.host);
     for (; optind < argc; ++optind) o.inputs.push_back(argv[optind]);
     if (o.inputs.empty()) { usage(); return 2; }
     o.file = o.inputs.front();   // display name for the header line

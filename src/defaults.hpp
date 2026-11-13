@@ -53,4 +53,18 @@ inline std::string defaultKeyPath() {
     return path;
 }
 
+// One control master per user@host.
+//
+// `ssh -O check` only proves that *a* master is alive on the socket; it does not
+// compare the target. Sharing one socket path therefore means a run against a
+// different host silently multiplexes over the previous connection. Deriving the
+// name from the target keeps them apart.
+inline std::string defaultSock(const std::string& user, const std::string& host) {
+    std::string name = user + "@" + host;
+    for (char& c : name) {
+        if (c == '/' || c == ':' || c == ' ') c = '_';
+    }
+    return "/tmp/pibridge-" + name + ".sock";
+}
+
 }  // namespace pib

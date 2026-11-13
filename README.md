@@ -294,6 +294,13 @@ PIBRIDGE_HOST=192.168.1.50 pibridge diag      # same thing
 The app has the same defaults and reads the same variables, so launching it from a
 shell with `PIBRIDGE_HOST` set configures it without touching the UI.
 
+One master per `user@host`: the control socket is
+`/tmp/pibridge-<user>@<host>.sock`, not one shared path. `ssh -O check` only
+proves that *a* master is alive on the socket, not that it points at the host you
+asked for, so a shared socket silently reuses a connection to a different machine.
+Pass `--sock` to override.
+
+
 ## Licence
 
 MIT. See `LICENSE`.
