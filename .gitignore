@@ -1,0 +1,7 @@
+# Build output: engine binary, .app bundles, dev screenshots.
+# receiver/hqdac-aarch64 is NOT ignored on purpose — the Pi cannot compile, so
+# the checked-in static binary is what users actually copy across.
+build/
+
+# macOS
+.DS_Store
